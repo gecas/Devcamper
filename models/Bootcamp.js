@@ -7,12 +7,14 @@ const BootcampSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please add name'],
         unique: true,
+        index: 'text',
         trim: true,
         maxlength: [50, 'Name can not be more than 50 characters']
     },
     slug: String,
     description: {
         type: String,
+        index: 'text',
         required: [true, 'Please add description'],
         maxlength: [500, 'Description can not be more than 500 characters']
     },
@@ -101,13 +103,13 @@ const BootcampSchema = new mongoose.Schema({
 });
 
 // Create bootcamp slug from the name
-BootcampSchema.pre('save', function(next) {
-    this.slug = slugify(this.name, { lower: true });
+BootcampSchema.pre('save', function (next) {
+    this.slug = slugify(this.name, {lower: true});
     next();
 });
 
 // Geocode & create location field
-BootcampSchema.pre('save', async function(next) {
+BootcampSchema.pre('save', async function (next) {
     const loc = await geocoder.geocode(this.address);
     this.location = {
         type: 'Point',
@@ -124,5 +126,32 @@ BootcampSchema.pre('save', async function(next) {
     this.address = undefined;
     next();
 });
+
+BootcampSchema.statics = {
+    searchPartial: function (q) {
+        return this.find(
+            {
+                $or: [
+                    {"name": new RegExp(q, "gi")},
+                    {"description": new RegExp(q, "gi")},
+                ]
+            },
+            // {$text: {$search: q, $caseSensitive: false}}
+        );
+    },
+
+    searchFull: function (q) {
+        return this.find({
+            $text: {$search: q, $caseSensitive: false}
+        });
+    },
+
+    search: async function(q){
+        const searchPartial = await this.searchPartial(q);
+        const searchFull = await this.searchFull(q);
+        searchPartial.concat(searchFull);
+        return searchPartial;
+    }
+}
 
 module.exports = mongoose.model('Bootcamp', BootcampSchema);
