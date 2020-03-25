@@ -17,7 +17,7 @@ exports.getBootcamps = asyncHandler(async (req, res, next) => {
 
     let queryStr = JSON.stringify(reqQuery);
     queryStr = queryStr.replace(/\b(gt|gte|lt|lte|in)\b/g, match => `$${match}`);
-    query = Bootcamp.find(JSON.parse(queryStr));
+    query = Bootcamp.find(JSON.parse(queryStr)).populate('courses');
     // Select fields
     if (req.query.select) {
         const fields = req.query.select.split(',').join(' ');
@@ -39,25 +39,21 @@ exports.getBootcamps = asyncHandler(async (req, res, next) => {
     const total = await Bootcamp.countDocuments();
 
     query = query.skip(startIndex).limit(limit);
-
     const bootcamps = await query;
-
     // Pagination result
     const pagination = {};
     if (endIndex < total) {
         pagination.next = {
-          page: page + 1,
-          limit
+            page: page + 1,
+            limit
         };
     }
-
-    if(startIndex > 0) {
+    if (startIndex > 0) {
         pagination.prev = {
-          page: page - 1,
-          limit
+            page: page - 1,
+            limit
         };
     }
-
     res.status(200).json({success: true, count: bootcamps.length, pagination, data: bootcamps});
 });
 
@@ -100,11 +96,14 @@ exports.updateBootcamp = asyncHandler(async (req, res, next) => {
 // @route     DELETE /api/v1/bootcamps/:id
 // @access    Private
 exports.deleteBootcamp = asyncHandler(async (req, res, next) => {
-    const bootcamp = await Bootcamp.findByIdAndDelete(req.params.id);
+    // const bootcamp = await Bootcamp.findByIdAndDelete(req.params.id);
+    const bootcamp = await Bootcamp.findById(req.params.id);
 
     if (!bootcamp) {
         return next(new ErrorResponse(`Bootcamp not found with id of ${req.params.id}`, 404));
     }
+
+    bootcamp.remove();
 
     res.status(200).json({success: true, data: {}});
 });
@@ -134,10 +133,33 @@ exports.getBootcampsInRadius = asyncHandler(async (req, res, next) => {
 });
 
 // @desc      Search bootcamps
-// @route     POST /api/v1/bootcamps/search
+// @route     GET /api/v1/bootcamps/search
 // @access    Private
 exports.textSearchBootcamps = asyncHandler(async (req, res, next) => {
     const searchQuery = req.query.q;
     const bootcamps = await Bootcamp.search(searchQuery);
+    res.status(200).json({success: true, count: bootcamps.length, data: bootcamps});
+});
+
+// @desc      Search bootcamps in bounding box
+// @route     POST /api/v1/bootcamps/coordinates
+// @access    Private
+exports.searchBootcampsInBoundingBox = asyncHandler(async (req, res, next) => {
+    const bottomLeftCoordinates = req.query.bottomLeftCoordinates;
+    const upperRightCoordinates = req.query.upperRightCoordinates;
+
+    if (!bottomLeftCoordinates && !upperRightCoordinates) {
+        return next(new ErrorResponse(`No valid coordinates provided for search`, 400));
+    }
+
+    const bootcamps = await Bootcamp.find({
+        location: {
+            $geoWithin: {
+                $box: [
+                    [ -72, -72 ], [ 100, 100 ]
+                ]
+            }
+        }
+    });
     res.status(200).json({success: true, count: bootcamps.length, data: bootcamps});
 });

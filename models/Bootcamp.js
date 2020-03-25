@@ -7,14 +7,12 @@ const BootcampSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please add name'],
         unique: true,
-        index: 'text',
         trim: true,
         maxlength: [50, 'Name can not be more than 50 characters']
     },
     slug: String,
     description: {
         type: String,
-        index: 'text',
         required: [true, 'Please add description'],
         maxlength: [500, 'Description can not be more than 500 characters']
     },
@@ -100,7 +98,12 @@ const BootcampSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
+}, {
+    toJSON: {virtuals: true},
+    toObject: {virtuals: true},
 });
+
+BootcampSchema.index({"$**": "text"});
 
 // Create bootcamp slug from the name
 BootcampSchema.pre('save', function (next) {
@@ -127,6 +130,21 @@ BootcampSchema.pre('save', async function (next) {
     next();
 });
 
+// Cascade courses when bootcamp is deleted
+BootcampSchema.pre('remove', async function (next) {
+    await this.model('Course').deleteMany({bootcamp: this._id});
+    next();
+});
+
+// Reverse populate with virtuals
+BootcampSchema.virtual('courses', {
+    ref: 'Course',
+    localField: '_id',
+    foreignField: 'bootcamp',
+    justOne: false
+});
+
+
 BootcampSchema.statics = {
     searchPartial: function (q) {
         return this.find(
@@ -146,7 +164,7 @@ BootcampSchema.statics = {
         });
     },
 
-    search: async function(q){
+    search: async function (q) {
         const searchPartial = await this.searchPartial(q);
         const searchFull = await this.searchFull(q);
         searchPartial.concat(searchFull);
