@@ -97,13 +97,18 @@ const BootcampSchema = new mongoose.Schema({
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    user: {
+        type: mongoose.Schema.ObjectId,
+        ref: 'User',
+        required: true
     }
 }, {
     toJSON: {virtuals: true},
     toObject: {virtuals: true},
 });
 
-BootcampSchema.index({"$**": "text"});
+// BootcampSchema.index({"$**": "text"});
 
 // Create bootcamp slug from the name
 BootcampSchema.pre('save', function (next) {
@@ -165,10 +170,11 @@ BootcampSchema.statics = {
     },
 
     search: async function (q) {
-        const searchPartial = await this.searchPartial(q);
-        const searchFull = await this.searchFull(q);
-        searchPartial.concat(searchFull);
-        return searchPartial;
+        // const searchPartial = await this.searchPartial(q);
+        // const searchFull = await this.searchFull(q);
+        // searchPartial.concat(searchFull);
+        // return searchPartial;
+        return await this.searchFull(q);
     }
 }
 

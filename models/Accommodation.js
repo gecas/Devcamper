@@ -1,32 +1,36 @@
 const mongoose = require('mongoose');
-const slugify = require('slugify');
 const geocoder = require('../utils/geocoder');
 
 const AccommodationSchema = new mongoose.Schema({
-    id: {
-        type: String,
-        required: [true, 'Please add id'],
-        unique: true,
-        trim: true,
-        maxlength: [250, 'Id can not be more than 50 characters']
+    itemId: {
+        type: String
     },
     name: {
-        type: String,
-        required: [true, 'Please add name'],
-        unique: true,
-        trim: true,
-        // maxlength: [250, 'Name can not be more than 50 characters']
+        type: String
     },
     name_suffix: {
         type: String,
-        required: [true, 'Please add name suffix'],
-        unique: true,
-        trim: true,
-        // maxlength: [250, 'Name suffix can not be more than 50 characters']
+    },
+    address: {
+        type: String,
+    },
+    type: {
+        type: String,
+        default: '0.0'
+    },
+    class: {
+        type: Object
+    },
+    bounding_box: {
+        type: Object
     },
     price: {
-        type: Array,
-        default: false
+        type: String,
+        default: '0.0'
+    },
+    savings: {
+        type: String,
+        default: '0.0'
     },
     location: {
         // GeoJSON Point
@@ -39,20 +43,9 @@ const AccommodationSchema = new mongoose.Schema({
             index: '2dsphere'
         }
     },
-    loc: {
-        // GeoJSON Point
-        type: {
-            type: String,
-            enum: ['Point']
-        },
-        coordinates: {
-            type: [Number],
-            index: '2dsphere'
-        }
-    },
     tag_keys: {
         type: Array,
-        default: false
+        default: []
     },
     createdAt: {
         type: Date,
@@ -60,17 +53,42 @@ const AccommodationSchema = new mongoose.Schema({
     }
 });
 
-AccommodationSchema.index({"$**": "text"});
-AccommodationSchema.pre('save', async function (next) {
-    this.loc = {
-        type: 'Point',
-        coordinates: [this.location.lng, this.location.lat],
-    };
-    this.location = {
-        type: 'Point',
-        coordinates: [this.location.lng, this.location.lat],
-    };
-    next();
+AccommodationSchema.statics = {
+    searchPartial: function (q) {
+        return this.find(
+            {
+                $or: [
+                    {"name": new RegExp(q, "gi")},
+                ],
+                // $caseSensitive: false
+            },
+            {'score': {'$meta': "textScore"}}
+        ).limit(750);
+    },
+
+    searchFull: function (q) {
+        return this.find({
+            $text: {$search: q, $caseSensitive: false}
+        }, {'score': {'$meta': "textScore"}}).sort({score: {$meta: "textScore"}}).limit(750);
+    },
+
+    search: async function (q) {
+        const searchFull = await this.searchFull(q);
+        if (searchFull.length) {
+            return searchFull;
+        }
+        const searchPartial = await this.searchPartial(q);
+        searchPartial.concat(searchFull);
+        return searchPartial;
+    }
+};
+
+AccommodationSchema.index({"$**": "text"}, {
+    weights: {
+        name: 10,
+        name_suffix: 9,
+        tag_keys: 8
+    },
 });
 
 module.exports = mongoose.model('Accommodation', AccommodationSchema);
